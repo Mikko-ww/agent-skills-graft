@@ -1,4 +1,4 @@
-"""The vault: this repository, the single source of truth for our own assets."""
+"""金库（vault）：本仓库，自有资产的唯一事实来源。"""
 
 from __future__ import annotations
 

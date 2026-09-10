@@ -1,12 +1,12 @@
-"""`graft import`: adopt loose skills scattered across platform directories.
+"""`graft import`：收编散落在各平台目录里的技能。
 
-For a skill found at e.g. ~/.codex/skills/foo:
+以 ~/.codex/skills/foo 为例：
 
-* external (source known, via --source or the vercel `.skill-lock.json`):
-  leave the files alone, just record `source` + `to` in the profile.
-* identical to a vault skill: replace the copy with a symlink into the vault.
-* new: move it into the vault, leave a symlink behind, add it to the profile.
-* different from a same-named vault skill: report a conflict and skip.
+* 外部技能（通过 --source、清单已有 source、或 vercel 的 .skill-lock.json 得知来源）：
+  文件原地不动，只在清单里记录 `source` + `to`。
+* 与金库某技能内容一致：把副本替换为指向金库的 symlink。
+* 新技能：移入金库，原位置留 symlink，写入清单。
+* 与金库同名但内容不同：报告冲突并跳过。
 """
 
 from __future__ import annotations
@@ -76,20 +76,20 @@ def import_skill(
     detected = platforms.detect_from_path(skill_dir)
     targets = to or ([detected.id] if detected and detected.id in profile.targets else [])
     if not targets:
-        return ImportResult(skill_dir, name, "skipped", "cannot infer target platform; pass --to")
+        return ImportResult(skill_dir, name, "skipped", "无法从路径推断目标平台，请用 --to 指定")
     unknown = [t for t in targets if t not in profile.targets]
     if unknown:
-        return ImportResult(skill_dir, name, "skipped", f"{unknown} not in profile targets")
+        return ImportResult(skill_dir, name, "skipped", f"{unknown} 不在清单 targets 中")
 
     if skill_dir.is_symlink() and vault.contains(skill_dir):
         _record(profile, SkillSpec(name, targets), dry_run)
-        return ImportResult(skill_dir, name, "skipped", "already a vault symlink")
+        return ImportResult(skill_dir, name, "skipped", "已经是指向金库的 symlink")
 
     existing = profile.skills.get(name)
     source = source or (existing.source if existing else None) or vercel_lock_sources().get(name)
     if source:
         _record(profile, SkillSpec(name, targets, source=source), dry_run)
-        return ImportResult(skill_dir, name, "external", f"source={source}, files left in place")
+        return ImportResult(skill_dir, name, "external", f"来源={source}，文件原地保留")
 
     dest = vault.skills_dir / name
     if dest.exists():
@@ -98,11 +98,9 @@ def import_skill(
                 fsutil.backup(skill_dir, f"import/{detected.id if detected else 'misc'}")
                 fsutil.make_symlink(skill_dir, dest)
             _record(profile, SkillSpec(name, targets), dry_run)
-            return ImportResult(
-                skill_dir, name, "linked", "identical to vault copy; replaced with symlink"
-            )
+            return ImportResult(skill_dir, name, "linked", "与金库内容一致，已替换为 symlink")
         return ImportResult(
-            skill_dir, name, "conflict", f"differs from {dest}; resolve manually or use --rename"
+            skill_dir, name, "conflict", f"与 {dest} 内容不同，请手动处理或用 --rename 另存"
         )
 
     # Leave the symlink under the *canonical* name so a dir renamed by its frontmatter
@@ -115,7 +113,7 @@ def import_skill(
             junk.unlink()
         fsutil.make_symlink(link_at, dest)
     _record(profile, SkillSpec(name, targets), dry_run)
-    note = f"-> {dest}, symlink left at {link_at.name}"
+    note = f"已移入 {dest}，原位置留下 symlink {link_at.name}"
     return ImportResult(skill_dir, name, "moved", note)
 
 

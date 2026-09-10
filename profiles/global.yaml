@@ -1,21 +1,21 @@
-# Machine-wide grafting: what goes into each platform's *global* skills dir.
-# Apply with:  uv run graft apply        (or `graft apply` after `uv tool install -e .`)
+# 机器级清单：每个平台的“全局”技能目录里应该有什么。
+# 应用方式：uv run graft apply   （或先 `uv tool install -e .`，再直接 `graft apply`）
 #
-# Platform ids match the vercel `skills` CLI --agent names. See `graft platforms`.
+# 平台 id 与 vercel `skills` CLI 的 --agent 名称一致，可用 `graft platforms` 查看目录。
 targets:
   - claude-code
   - codex
   - cursor
   - opencode
-  - universal   # ~/.agents/skills, read by amp/cline/zed and used as canonical dir by `npx skills`
+  - universal   # ~/.agents/skills：amp/cline/zed 读取，也是 `npx skills` 的规范目录
 
 skills:
-  # ---- vault skills (live in ./skills, symlinked, edits take effect immediately) ----
+  # ---- 金库技能（位于 ./skills，建 symlink，改动即时生效）----
   searching-github-projects: {to: [claude-code, codex, cursor, opencode, universal]}
   sora: {to: [codex]}
   skill-lookup: {to: [codex]}
 
-  # ---- external skills (not vendored; installed via `npx skills add <source>`) ----
+  # ---- 外部技能（不入库，通过 `npx skills add <source>` 安装）----
   find-skills:
     source: vercel-labs/skills
     to: [universal]

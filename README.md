@@ -1,55 +1,54 @@
 # agent-skills-graft
 
-One vault of agent assets (skills today; agents / commands / rules / plugins next),
-grafted onto every agent platform I use — Claude Code, Codex, Cursor, OpenCode, pi —
-from a declarative profile instead of by hand.
+一个仓库存放我所有的 agent 资产（目前是 skill；接下来是 agent / command / rule / plugin），
+通过声明式清单"嫁接"到我使用的各个平台——Claude Code、Codex、Cursor、OpenCode、pi——
+而不是手动复制。
 
 ```
-skills/                  # the vault: SKILL.md folders (agentskills.io format)
-profiles/global.yaml     # what goes where, machine-wide
-profiles/projects/*.yaml # per-project grafts (Phase 2)
-src/graft/               # the `graft` CLI (Python, uv)
-docs/DESIGN.md           # architecture, research, roadmap
+skills/                  # 金库（vault）：SKILL.md 目录，agentskills.io 格式
+profiles/global.yaml     # 机器级清单：什么装到哪个平台
+profiles/projects/*.yaml # 项目级清单（Phase 2）
+src/graft/               # graft 命令行（Python，uv）
+docs/DESIGN.md           # 调研、架构、路线图
 ```
 
-## Install
+## 安装
 
 ```bash
-uv sync                      # dev: then `uv run graft ...`
-uv tool install -e .         # or: put `graft` on PATH
+uv sync                      # 开发方式：之后用 `uv run graft ...`
+uv tool install -e .         # 或者把 `graft` 装到 PATH
 ```
 
-## Use
+## 使用
 
 ```bash
-graft status                 # diff profile vs. disk, changes nothing
-graft apply --dry-run        # show the plan
-graft apply                  # symlink vault skills, `npx skills add` external ones
-graft apply --prune          # also remove vault symlinks no longer declared
-graft import ~/.codex/skills # adopt loose skills into the vault + profile
-graft platforms              # where each platform reads global skills from
-graft skills                 # what is in the vault
+graft status                 # 对比清单与磁盘，不改任何东西
+graft apply --dry-run        # 只看计划
+graft apply                  # 金库技能建 symlink，外部技能走 `npx skills add`
+graft apply --prune          # 同时删除清单里已不存在的金库 symlink
+graft import ~/.codex/skills # 把散落的技能收编进金库和清单
+graft platforms              # 各平台读取全局技能的目录
+graft skills                 # 金库里有什么
 ```
 
-Vault skills are **symlinked** straight into each platform's skills directory, so an edit
-in `skills/` is live everywhere. External skills (`source: owner/repo`) are not vendored;
-`graft` delegates to [`npx skills add`](https://github.com/vercel-labs/skills), which keeps
-its own lock file.
+金库里的技能是直接 **symlink** 到各平台技能目录的，改一处 `skills/` 立即处处生效。
+外部技能（`source: owner/repo`）不入库，`graft` 委托 [`npx skills add`](https://github.com/vercel-labs/skills)
+安装，由它维护自己的 lock 文件。
 
-Nothing is ever deleted: real directories that `graft` replaces are moved to
-`~/.local/share/graft/backup/<timestamp>/`.
+任何东西都不会被直接删除：被 `graft` 替换掉的真实目录会移到
+`~/.local/share/graft/backup/<时间戳>/`。
 
-## Profile format
+## 清单格式
 
 ```yaml
 targets: [claude-code, codex, cursor, opencode, universal]
 
 skills:
-  searching-github-projects: { to: [codex, cursor] }   # vault skill
-  mcp-builder: { to: "*" }                             # every target
-  frontend-design:                                     # external
+  searching-github-projects: { to: [codex, cursor] }   # 金库技能
+  mcp-builder: { to: "*" }                             # 全部 targets
+  frontend-design:                                     # 外部技能
     source: anthropics/skills
     to: [cursor, claude-code]
 ```
 
-See [docs/DESIGN.md](docs/DESIGN.md) for the full design and roadmap.
+完整设计与路线图见 [docs/DESIGN.md](docs/DESIGN.md)。

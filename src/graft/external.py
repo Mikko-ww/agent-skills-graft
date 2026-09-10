@@ -1,7 +1,7 @@
-"""Delegate *external* skills (owner/repo sources) to the vercel `skills` CLI.
+"""把*外部*技能（owner/repo 来源）委托给 vercel `skills` CLI。
 
-We do not vendor third-party skills into the vault; the profile records the source
-and `npx skills add` performs the install, keeping its own `.skill-lock.json`.
+第三方技能不入库；清单只记录来源，由 `npx skills add` 执行安装并维护它自己的
+`.skill-lock.json`。
 """
 
 from __future__ import annotations
@@ -46,8 +46,8 @@ def run_add(
     if dry_run:
         return cmd
     if not skills_cli_available():
-        raise ExternalError("`npx` not found; install Node.js to manage external skills")
+        raise ExternalError("找不到 `npx`；管理外部技能需要安装 Node.js")
     result = subprocess.run(cmd, cwd=cwd, check=False)
     if result.returncode != 0:
-        raise ExternalError(f"`{' '.join(cmd)}` exited with {result.returncode}")
+        raise ExternalError(f"`{' '.join(cmd)}` 退出码 {result.returncode}")
     return cmd

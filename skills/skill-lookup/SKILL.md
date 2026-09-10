@@ -1,76 +1,77 @@
 ---
 name: skill-lookup
-description: Activates when the user asks about Agent Skills, wants to find reusable AI capabilities, needs to install skills, or mentions skills for Codex. Use for discovering, retrieving, and installing skills.
+description: 当用户询问 Agent Skills、想找可复用的 AI 能力、需要安装技能，或提到给 Codex 加技能时触发。用于发现、获取和安装技能。
 ---
 
-When the user needs Agent Skills, wants to extend Claude's capabilities, or is looking for reusable AI agent components, use the prompts.chat MCP server.
+当用户需要 Agent Skills、想扩展 agent 的能力、或在找可复用的 agent 组件时，使用 prompts.chat 的 MCP server。
 
-## When to Use This Skill
+## 何时使用
 
-Activate this skill when the user:
+用户出现以下意图时启用本技能：
 
-- Asks for Agent Skills ("Find me a code review skill")
-- Wants to search for skills ("What skills are available for testing?")
-- Needs to retrieve a specific skill ("Get skill XYZ")
-- Wants to install a skill ("Install the documentation skill")
-- Mentions extending Claude's capabilities with skills
+- 索要 Agent Skill（“帮我找一个代码审查的 skill”）
+- 想搜索技能（“有哪些测试相关的技能？”）
+- 需要获取某个具体技能（“把 XYZ 这个 skill 拿下来”）
+- 想安装技能（“安装那个写文档的 skill”）
+- 提到用技能扩展 agent 的能力
 
-## Available Tools
+## 可用工具
 
-Use these prompts-chat MCP tools:
+使用 prompts-chat MCP 提供的工具：
 
-- `search_skills` - Search for skills by keyword
-- `get_skill` - Get a specific skill by ID with all its files
+- `search_skills`：按关键词搜索技能
+- `get_skill`：按 ID 获取某个技能及其全部文件
 
-## How to Search for Skills
+## 如何搜索
 
-Call `search_skills` with:
+调用 `search_skills`，参数：
 
-- `query`: The search keywords from the user's request
-- `limit`: Number of results (default 10, max 50)
-- `category`: Filter by category slug (e.g., "coding", "automation")
-- `tag`: Filter by tag slug
+- `query`：从用户请求中提取的关键词
+- `limit`：返回条数（默认 10，最大 50）
+- `category`：按分类 slug 过滤（如 `coding`、`automation`）
+- `tag`：按标签 slug 过滤
 
-Present results showing:
-- Title and description
-- Author name
-- File list (SKILL.md, reference docs, scripts)
-- Category and tags
-- Link to the skill
+展示结果时包含：
 
-## How to Get a Skill
+- 标题与描述
+- 作者
+- 文件列表（SKILL.md、参考文档、脚本）
+- 分类与标签
+- 技能链接
 
-Call `get_skill` with:
+## 如何获取
 
-- `id`: The skill ID
+调用 `get_skill`，参数：
 
-Returns the skill metadata and all file contents:
-- SKILL.md (main instructions)
-- Reference documentation
-- Helper scripts
-- Configuration files
+- `id`：技能 ID
 
-## How to Install a Skill
+返回技能元数据和全部文件内容：
 
-When the user asks to install a skill:
+- SKILL.md（主说明）
+- 参考文档
+- 辅助脚本
+- 配置文件
 
-1. Call `get_skill` to retrieve all files
-2. Create the directory `.codex/skills/{slug}/`
-3. Save each file to the appropriate location:
-   - `SKILL.md` → `.codex/skills/{slug}/SKILL.md`
-   - Other files → `.codex/skills/{slug}/{filename}`
+## 如何安装
 
-## Skill Structure
+用户要求安装时：
 
-Skills contain:
-- **SKILL.md** (required) - Main instructions with frontmatter
-- **Reference docs** - Additional documentation files
-- **Scripts** - Helper scripts (Python, shell, etc.)
-- **Config files** - JSON, YAML configurations
+1. 调用 `get_skill` 取回全部文件。
+2. 优先放进本仓库金库 `skills/{slug}/`，再在 `profiles/global.yaml` 声明目标平台，运行 `graft apply`。
+3. 如果只是临时试用，也可以直接写到当前项目的 `.agents/skills/{slug}/`（Codex / Cursor / OpenCode 共用）。
+   - `SKILL.md` → `{slug}/SKILL.md`
+   - 其余文件 → `{slug}/{filename}`
 
-## Guidelines
+## 技能结构
 
-- Always search before suggesting the user create their own skill
-- Present search results in a readable format with file counts
-- When installing, confirm the skill was saved successfully
-- Explain what the skill does and when it activates
+- **SKILL.md**（必需）：带 frontmatter 的主说明
+- **参考文档**：补充说明文件
+- **脚本**：Python、shell 等辅助脚本
+- **配置文件**：JSON、YAML
+
+## 原则
+
+- 先搜索，再建议用户自己写技能。
+- 搜索结果要可读，并标出文件数量。
+- 安装后确认文件已落盘。
+- 解释该技能做什么、何时触发。

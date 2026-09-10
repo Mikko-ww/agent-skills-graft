@@ -1,17 +1,17 @@
-"""Declarative profiles: *what* goes *where*.
+"""声明式清单：*什么* 装到 *哪里*。
 
     # profiles/global.yaml
     targets: [claude-code, codex, cursor]
 
     skills:
-      searching-github-projects: { to: [codex, cursor] }   # vault skill
-      mcp-builder: { to: "*" }                             # "*" = every target
-      frontend-design:                                     # external skill
+      searching-github-projects: { to: [codex, cursor] }   # 金库技能
+      mcp-builder: { to: "*" }                             # "*" = 全部 targets
+      frontend-design:                                     # 外部技能
         source: anthropics/skills                          #   -> npx skills add
         to: [cursor, claude-code]
-      pdf: [codex]                                         # shorthand for { to: [codex] }
+      pdf: [codex]                                         # 简写：{ to: [codex] }
 
-Profiles are edited with ruamel.yaml so comments survive `graft import` write-backs.
+清单用 ruamel.yaml 读写，`graft import` 回写时能保留注释。
 """
 
 from __future__ import annotations

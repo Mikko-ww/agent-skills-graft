@@ -1,8 +1,7 @@
-"""Platform registry: where each agent platform reads skills from.
+"""平台注册表：每个 agent 平台从哪里读取技能。
 
-IDs deliberately match the `--agent` names used by the vercel `skills` CLI so the
-same identifier can be passed straight through when we delegate external installs.
-Paths follow https://github.com/vercel-labs/skills (src/agents.ts).
+id 刻意与 vercel `skills` CLI 的 `--agent` 名称保持一致，委托外部安装时可直接透传。
+路径来源：https://github.com/vercel-labs/skills（src/agents.ts）。
 """
 
 from __future__ import annotations

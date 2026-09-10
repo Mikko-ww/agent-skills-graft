@@ -1,4 +1,4 @@
-"""Small filesystem helpers: symlinks, backups, directory equality."""
+"""文件系统小工具：symlink、备份、目录等价比较。"""
 
 from __future__ import annotations
 

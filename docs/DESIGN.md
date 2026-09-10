@@ -137,7 +137,14 @@ skills:
 - 仓库根 `package.json` 增加 `pi` 字段，使 `pi install git:<repo>` 能装 TS extension。
 - GitHub Action：`graft plugin build --check` 防止 manifest 漂移。
 
-## 6. 已知取舍
+## 6. 约定
+
+- **语言以中文为主**：README、设计文档、清单注释、CLI 帮助与输出、自有技能的 SKILL.md 正文都用中文。
+  技能 frontmatter 的 `description` 可以中英混写，保留英文触发词以便各平台匹配。
+- 从上游原样收编、仍与上游对齐的技能（如 `sora`，Apache-2.0）保持原文，不做翻译，方便日后对比更新。
+- 代码标识符、状态名（`ok/link/relink/adopt/conflict/orphan`）、平台 id 保持英文，它们是机器值。
+
+## 7. 已知取舍
 
 - 清单回写用 ruamel.yaml 保留注释，但被 `import` 改写的条目会丢失该条目自己的行内注释。
 - 外部技能的"是否已安装"仅看目标路径是否存在，不校验 hash；版本更新交给 `npx skills update`。

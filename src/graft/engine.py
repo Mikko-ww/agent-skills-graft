@@ -1,7 +1,7 @@
-"""Plan and apply: compare a profile against the filesystem and reconcile.
+"""计划与执行：把清单和文件系统做对比，并修正差异。
 
-Stateless by design: a link is "managed" iff it is a symlink that resolves into the
-vault's skills directory. No lock file is needed to detect drift or orphans.
+刻意设计为无状态：一个链接“被 graft 管理”当且仅当它是 symlink 且解析后落在金库的
+skills 目录内。因此不需要 lock 文件就能检测漂移和孤儿链接。
 """
 
 from __future__ import annotations
@@ -81,7 +81,7 @@ def plan(vault: Vault, profile: Profile) -> Report:
             if entry.name in declared[platform_id]:
                 continue
             report.actions.append(
-                Action(State.ORPHAN, entry.name, platform_id, entry, note="not in profile")
+                Action(State.ORPHAN, entry.name, platform_id, entry, note="清单中未声明")
             )
     return report
 
@@ -89,7 +89,9 @@ def plan(vault: Vault, profile: Profile) -> Report:
 def _plan_vault(spec: SkillSpec, platform_id: str, link: Path, vault_skills) -> Action:
     skill = vault_skills.get(spec.name)
     if skill is None:
-        return Action(State.NOT_IN_VAULT, spec.name, platform_id, link, note="add to skills/")
+        return Action(
+            State.NOT_IN_VAULT, spec.name, platform_id, link, note="金库 skills/ 中不存在"
+        )
     target = skill.path
     if link.is_symlink():
         if fsutil.points_to(link, target):
@@ -97,9 +99,11 @@ def _plan_vault(spec: SkillSpec, platform_id: str, link: Path, vault_skills) -> 
         return Action(State.RELINK, spec.name, platform_id, link, target, note=_describe(link))
     if link.exists():
         if link.is_dir() and fsutil.dirs_equal(link, target):
-            return Action(State.ADOPT, spec.name, platform_id, link, target, note="identical copy")
+            return Action(
+                State.ADOPT, spec.name, platform_id, link, target, note="内容与金库一致的真实目录"
+            )
         return Action(
-            State.CONFLICT, spec.name, platform_id, link, target, note="differs from vault"
+            State.CONFLICT, spec.name, platform_id, link, target, note="真实目录，内容与金库不同"
         )
     return Action(State.LINK, spec.name, platform_id, link, target)
 
@@ -112,9 +116,9 @@ def _plan_external(spec: SkillSpec, platform_id: str, link: Path) -> Action:
 
 def _describe(link: Path) -> str:
     try:
-        return f"currently -> {link.readlink()}"
+        return f"当前指向 {link.readlink()}"
     except OSError:
-        return "broken symlink"
+        return "断链"
 
 
 def _execute(action: Action, *, dry_run: bool, force: bool, prune: bool) -> None:
@@ -126,15 +130,15 @@ def _execute(action: Action, *, dry_run: bool, force: bool, prune: bool) -> None
         fsutil.make_symlink(action.link, action.target)  # type: ignore[arg-type]
     elif action.state is State.CONFLICT and force:
         if dry_run:
-            action.note = "would back up and relink (--force)"
+            action.note = "将备份后重新建链（--force）"
             return
         moved = fsutil.backup(action.link, action.platform)
-        action.note = f"backed up to {moved}"
+        action.note = f"已备份到 {moved}"
         fsutil.make_symlink(action.link, action.target)  # type: ignore[arg-type]
     elif action.state is State.ORPHAN and prune:
         if not dry_run:
             action.link.unlink()
-        action.note = "pruned"
+        action.note = "已删除"
 
 
 def apply(
