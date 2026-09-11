@@ -6,6 +6,7 @@
 
 ```
 skills/                  # 金库（vault）：SKILL.md 目录，agentskills.io 格式
+plugins/                 # 自有插件内容（graft 尚未管理）
 profiles/global.yaml     # 机器级清单：什么装到哪个平台
 profiles/projects/*.yaml # 项目级清单（Phase 2）
 src/graft/               # graft 命令行（Python，uv）
@@ -50,5 +51,7 @@ skills:
     source: anthropics/skills
     to: [cursor, claude-code]
 ```
+
+`plugins/` 已收编自有插件内容（目前是 `matt-agent-skills`），**graft 尚未管理插件**。本机 Cursor 启用步骤见 [plugins/matt-agent-skills/README.md](plugins/matt-agent-skills/README.md)。
 
 完整设计与路线图见 [docs/DESIGN.md](docs/DESIGN.md)。

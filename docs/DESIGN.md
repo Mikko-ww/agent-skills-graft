@@ -123,9 +123,10 @@ skills:
 ## 5. 路线图
 
 **Phase 1 · plugins**
-- `plugins/<name>/plugin.yaml` → 生成 `.cursor-plugin/plugin.json`、`.claude-plugin/plugin.json`、`.codex-plugin/plugin.json`（三者同构：`name/version/description` + `skills/`、`hooks/`、`.mcp.json`；Cursor 多 `rules/agents/commands`，Codex 多 `apps/interface`）。
+- `plugins/<name>/plugin.yaml` → 生成 `.cursor-plugin/plugin.json`、`.claude-plugin/plugin.json`、`.codex-plugin/plugin.json`。三家共享标识字段（`name`/`version`/`description`/`author`/`keywords`/`skills`），展示字段按平台投影，不是字节级同构；Cursor 多 `rules/agents/commands`，Codex 多 `apps/interface`。
 - 本仓库注册为三家 marketplace：Claude `claude plugin marketplace add <path>`；Codex `~/.agents/plugins/marketplace.json`；Cursor symlink 到 `~/.cursor/plugins/local/<name>`。
 - 清单增加 `plugins:` 段；外部插件（如 superpowers）只记来源，调各平台原生命令安装。
+- `matt-agent-skills` 内容已按方案 A 落到 `plugins/matt-agent-skills/`；CLI / marketplace / 清单 `plugins:` 仍未做。
 
 **Phase 2 · 项目级 + 体检**
 - `profiles/projects/<name>.yaml`（含 `path:`），`graft apply <name>`；`graft link` 在任意项目目录内生成并应用。

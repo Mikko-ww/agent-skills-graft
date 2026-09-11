@@ -1,0 +1,17 @@
+{
+  "name": "matt-agent-skills",
+  "version": "0.1.0",
+  "description": "面向 coding agent 的工程与生产力技能包（grill → spec → tickets → implement）",
+  "author": {
+    "name": "agent-skills-graft"
+  },
+  "keywords": ["skills", "workflow", "tdd", "code-review"],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Matt Agent Skills",
+    "shortDescription": "Agent engineering skill pack",
+    "longDescription": "面向 coding agent 的工程与生产力技能包，覆盖 grill → spec → tickets → implement 主链路，共 26 条 matt-* 技能。",
+    "developerName": "agent-skills-graft",
+    "category": "Productivity"
+  }
+}

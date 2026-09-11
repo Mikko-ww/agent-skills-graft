@@ -1,0 +1,5 @@
+interface:
+  display_name: "Skill Flows"
+  short_description: "Route to the right skill or flow"
+policy:
+  allow_implicit_invocation: false

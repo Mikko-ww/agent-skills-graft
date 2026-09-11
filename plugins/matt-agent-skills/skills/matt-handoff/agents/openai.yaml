@@ -1,0 +1,5 @@
+interface:
+  display_name: "Handoff"
+  short_description: "Compress the chat into a handoff"
+policy:
+  allow_implicit_invocation: false

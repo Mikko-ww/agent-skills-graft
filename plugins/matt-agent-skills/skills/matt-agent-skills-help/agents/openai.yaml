@@ -1,0 +1,5 @@
+interface:
+  display_name: "Agent Skills Help"
+  short_description: "Markdown catalog of matt skills"
+policy:
+  allow_implicit_invocation: false

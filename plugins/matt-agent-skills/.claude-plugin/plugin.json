@@ -1,0 +1,12 @@
+{
+  "name": "matt-agent-skills",
+  "displayName": "Matt Agent Skills",
+  "version": "0.1.0",
+  "description": "面向 coding agent 的工程与生产力技能包（grill → spec → tickets → implement）",
+  "author": {
+    "name": "agent-skills-graft"
+  },
+  "license": "UNLICENSED",
+  "keywords": ["skills", "workflow", "tdd", "code-review"],
+  "skills": "./skills/"
+}

@@ -7,7 +7,8 @@
 
 一个"金库 + 清单 + 薄胶水"：
 
-- **金库（vault）** `skills/`：我自己维护的 agent 资产的唯一事实来源（目前只有 skill；后续加 agents / commands / rules / plugins）。
+- **金库（vault）** `skills/`：我自己维护的 skill 的唯一事实来源（后续加 agents / commands / rules）。
+- **插件内容** `plugins/`：自有插件目录（目前 `matt-agent-skills`）；**graft 尚未管理**，清单也还没有 `plugins:` 段。
 - **清单（profile）** `profiles/*.yaml`：声明"哪个资产 → 装到哪个平台 → 全局还是某项目"。
 - **胶水** `graft` CLI（Python 3.11 + uv）：读清单、对比磁盘、把差异补齐。金库技能直接 **symlink** 到各平台目录；外部技能委托 `npx skills add`（vercel-labs/skills）。
 
@@ -24,6 +25,8 @@ agent-skills-graft/
 │   ├── searching-github-projects/   # 自有，中文
 │   ├── skill-lookup/                # 自有，中文
 │   └── sora/                        # 上游原样收编（Apache-2.0），保持英文
+├── plugins/                  # 自有插件内容（graft 尚未管理）
+│   └── matt-agent-skills/    # 方案 A 收编；本机 Cursor 用 symlink
 ├── profiles/
 │   ├── global.yaml           # 机器级清单（当前唯一生效的清单）
 │   └── projects/<name>.yaml  # 项目级清单（Phase 2，目录尚未创建）

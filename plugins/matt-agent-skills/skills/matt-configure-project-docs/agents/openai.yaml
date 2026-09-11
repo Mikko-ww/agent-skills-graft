@@ -1,0 +1,5 @@
+interface:
+  display_name: "Configure Project Docs"
+  short_description: "One-time project docs setup"
+policy:
+  allow_implicit_invocation: false
