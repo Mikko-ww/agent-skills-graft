@@ -127,7 +127,7 @@ uv run graft import <path> [-n] [--source owner/repo] [--to a,b] [--rename x]
 
 详细见 `docs/DESIGN.md` §5。摘要：
 
-- **Phase 1 · plugins**：`plugins/<name>/plugin.yaml` 生成三家 manifest（`.cursor-plugin/plugin.json`、`.claude-plugin/plugin.json`、`.codex-plugin/plugin.json`）；本仓库注册为三家 marketplace（Claude `claude plugin marketplace add <path>`；Codex `~/.agents/plugins/marketplace.json`；Cursor symlink 到 `~/.cursor/plugins/local/<name>`）；清单加 `plugins:` 段。
+- **Phase 1 · plugins**：`matt-agent-skills` 内容已按方案 A 落到 `plugins/matt-agent-skills/`（手写 `plugin.yaml` 与三家 manifest；本机 Cursor 已可 symlink）。CLI 仍待做：由 `plugin.yaml` 生成/校验三家 manifest；本仓库注册为三家 marketplace（Claude `claude plugin marketplace add <path>`；Codex `~/.agents/plugins/marketplace.json`；Cursor symlink 到 `~/.cursor/plugins/local/<name>`）；清单加 `plugins:` 段。
 - **Phase 2 · 项目级**：`profiles/projects/<name>.yaml`（含 `path:`），`graft apply <name>`；`graft link` 在项目目录内生成清单；`graft doctor`。引擎已按 `profile.project` 抽象，主要是 CLI 与清单发现的工作。
 - **Phase 3 · rules / MCP / hooks / pi**：接 rulesync 生成 AGENTS.md / CLAUDE.md / `.cursor/rules` / MCP；根 `package.json` 加 `pi` 字段；CI 跑 `graft plugin build --check`。
 

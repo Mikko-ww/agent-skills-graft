@@ -16,7 +16,7 @@
    - 不存在：`ln -s <源> <目标>`（不要 `-f`）
    - 已是 symlink 且 `realpath` 等于源：不操作
    - 已是 symlink 但指向别处或断链：`unlink` 后 `ln -s`
-   - 普通文件或真实目录：先 `mkdir -p ~/.local/share/graft/backup/<时间戳>`，再把目标 **mv** 为该目录下的 `matt-agent-skills`，然后 `ln -s`
+   - 普通文件或真实目录：先 `mkdir -p ~/.local/share/graft/backup/<时间戳>`，再把目标 **mv** 为该目录下的 `matt-agent-skills`（不要先 mkdir 最终目录名，以免嵌套成 `…/matt-agent-skills/matt-agent-skills`），然后 `ln -s`
 3. 确认 `test -L` 为真，且 `realpath` 等于源
 
 不要用裸 `ln -sfn`：`-f` 可能删掉普通文件。

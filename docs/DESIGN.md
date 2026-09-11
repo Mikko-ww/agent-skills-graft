@@ -32,6 +32,7 @@ SKILL.md 不会实时生效。这决定了本仓库自有技能由 `graft` **直
 ```
 agent-skills-graft/
 ├── skills/                   # vault：自有技能，SKILL.md 目录（agentskills.io 格式）
+├── plugins/                  # 自有插件内容（graft 尚未管理；目前 matt-agent-skills）
 ├── profiles/
 │   ├── global.yaml           # 机器级：什么 → 哪个平台的全局目录
 │   └── projects/<name>.yaml  # 项目级（Phase 2）
