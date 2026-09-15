@@ -50,6 +50,22 @@ def points_to(link: Path, target: Path) -> bool:
         return False
 
 
+def copy_tree(src: Path, dest: Path) -> None:
+    """把 `src` 完整拷贝到 `dest`（`dest` 必须尚不存在），忽略 IGNORED_NAMES。
+
+    用 copy2 保留 mtime，这样之后 `dirs_equal()` 的浅比较（大小 + mtime）能直接判定 ok。
+    symlink 会被解引用为真实文件：拷贝的目的就是让目标目录里不再有指向外部的链接。
+    """
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copytree(
+        src,
+        dest,
+        symlinks=False,
+        ignore=shutil.ignore_patterns(*IGNORED_NAMES),
+        copy_function=shutil.copy2,
+    )
+
+
 def make_symlink(link: Path, target: Path) -> None:
     link.parent.mkdir(parents=True, exist_ok=True)
     if link.is_symlink():

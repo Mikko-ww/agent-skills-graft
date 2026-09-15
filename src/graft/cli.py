@@ -27,6 +27,8 @@ _STATE_STYLE = {
     State.LINK: "cyan",
     State.RELINK: "yellow",
     State.ADOPT: "cyan",
+    State.COPY: "cyan",
+    State.SYNC: "yellow",
     State.CONFLICT: "red",
     State.EXTERNAL_MISSING: "magenta",
     State.ORPHAN: "yellow",
@@ -58,17 +60,17 @@ def _short(path: Path) -> str:
 
 def _render(report: engine.Report, *, title: str, verbose: bool) -> None:
     table = Table(title=title, show_lines=False, expand=True)
-    table.add_column("技能", overflow="fold")
+    table.add_column("资产", overflow="fold")
     table.add_column("平台")
     table.add_column("状态")
-    table.add_column("链接位置", overflow="fold")
+    table.add_column("位置", overflow="fold")
     table.add_column("说明", overflow="fold")
-    for action in sorted(report.actions, key=lambda a: (a.skill, a.platform)):
+    for action in sorted(report.actions, key=lambda a: (a.kind, a.skill, a.platform)):
         if action.state is State.OK and not verbose:
             continue
         style = _STATE_STYLE[action.state]
         table.add_row(
-            action.skill,
+            f"[dim]插件[/dim] {action.skill}" if action.is_plugin else action.skill,
             action.platform,
             f"[{style}]{action.state.value}[/{style}]",
             _short(action.link),
@@ -118,8 +120,13 @@ def status(
 def apply(
     profile: ProfileArg = "global",
     dry_run: Annotated[bool, typer.Option("-n", "--dry-run", help="只展示计划，不动文件")] = False,
-    force: Annotated[bool, typer.Option("--force", help="备份有冲突的真实目录后重新建链")] = False,
-    prune: Annotated[bool, typer.Option("--prune", help="删除清单里没有的金库 symlink")] = False,
+    force: Annotated[
+        bool, typer.Option("--force", help="备份有冲突的真实目录后重新建链 / 重新拷贝")
+    ] = False,
+    prune: Annotated[
+        bool,
+        typer.Option("--prune", help="清理清单里没有的金库 symlink 与插件拷贝（真实目录走备份）"),
+    ] = False,
     no_external: Annotated[
         bool, typer.Option("--no-external", help="跳过外部技能（不调用 `npx skills add`）")
     ] = False,
@@ -198,9 +205,17 @@ def platforms_cmd() -> None:
     table.add_column("项目级目录")
     table.add_column("全局目录")
     table.add_column("已存在")
+    table.add_column("本地插件目录")
     for p in platforms.PLATFORMS.values():
         g = p.global_skills_dir()
-        table.add_row(p.id, p.label, p.project_skills_dir, _short(g), "是" if g.is_dir() else "-")
+        table.add_row(
+            p.id,
+            p.label,
+            p.project_skills_dir,
+            _short(g),
+            "是" if g.is_dir() else "-",
+            _short(p.plugins_dir()) if p.supports_plugins else "-",
+        )
     console.print(table)
 
 
@@ -213,6 +228,25 @@ def skills_cmd() -> None:
     table.add_column("frontmatter 名称（与目录不同时显示）")
     for dir_name, skill in vault.skills().items():
         table.add_row(dir_name, skill.name if skill.name != dir_name else "")
+    console.print(table)
+
+
+@app.command("plugins")
+def plugins_cmd() -> None:
+    """列出金库中的插件（plugins/<name>/plugin.yaml）。"""
+    vault = Vault(find_root())
+    table = Table(title=f"金库插件 · {_short(vault.plugins_dir)}")
+    table.add_column("目录")
+    table.add_column("plugin.yaml 名称（与目录不同时显示）")
+    table.add_column("技能数")
+    for dir_name, plugin in vault.plugins().items():
+        skills_dir = plugin.path / "skills"
+        n = (
+            sum(1 for d in skills_dir.iterdir() if (d / "SKILL.md").is_file())
+            if skills_dir.is_dir()
+            else 0
+        )
+        table.add_row(dir_name, plugin.name if plugin.name != dir_name else "", str(n))
     console.print(table)
 
 

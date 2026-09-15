@@ -17,6 +17,9 @@ class Platform:
     label: str
     project_skills_dir: str  # relative to a project root
     _global_skills_dir: str  # may contain ${VAR:-default} style tokens, expanded at runtime
+    # 本地插件目录（机器级）。None = 该平台没有“放一个目录就能被发现”的插件机制，
+    # 例如 Claude Code / Codex 只认 marketplace，交给后续阶段。
+    _global_plugins_dir: str | None = None
 
     def global_skills_dir(self) -> Path:
         return _expand(self._global_skills_dir)
@@ -25,6 +28,15 @@ class Platform:
         if project is None:
             return self.global_skills_dir()
         return project / self.project_skills_dir
+
+    @property
+    def supports_plugins(self) -> bool:
+        return self._global_plugins_dir is not None
+
+    def plugins_dir(self) -> Path:
+        if self._global_plugins_dir is None:
+            raise KeyError(f"platform '{self.id}' has no local plugins directory")
+        return _expand(self._global_plugins_dir)
 
 
 def _expand(template: str) -> Path:
@@ -44,7 +56,14 @@ def _expand(template: str) -> Path:
 _PLATFORMS: tuple[Platform, ...] = (
     Platform("claude-code", "Claude Code", ".claude/skills", "$CLAUDE_HOME/skills"),
     Platform("codex", "Codex", ".agents/skills", "$CODEX_HOME/skills"),
-    Platform("cursor", "Cursor", ".agents/skills", "$HOME/.cursor/skills"),
+    # Cursor 的本地插件目录会拒绝指向目录外的 symlink（realpath 校验），只能放真实拷贝。
+    Platform(
+        "cursor",
+        "Cursor",
+        ".agents/skills",
+        "$HOME/.cursor/skills",
+        _global_plugins_dir="$HOME/.cursor/plugins/local",
+    ),
     Platform("opencode", "OpenCode", ".agents/skills", "$XDG_CONFIG_HOME/opencode/skills"),
     Platform("pi", "pi", ".pi/skills", "$HOME/.pi/agent/skills"),
     Platform("gemini-cli", "Gemini CLI", ".agents/skills", "$HOME/.gemini/skills"),

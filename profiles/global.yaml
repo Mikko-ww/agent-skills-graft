@@ -37,3 +37,8 @@ skills:
   playwright:
     source: openai/skills
     to: [codex]
+
+plugins:
+  # ---- 金库插件（位于 ./plugins，拷贝同步到平台本地插件目录；改动后需再跑 apply）----
+  # Cursor 拒绝 ~/.cursor/plugins/local 下指向目录外的 symlink，所以这里不是链接而是拷贝。
+  matt-agent-skills: {to: [cursor]}

@@ -1,7 +1,11 @@
 """计划与执行：把清单和文件系统做对比，并修正差异。
 
-刻意设计为无状态：一个链接“被 graft 管理”当且仅当它是 symlink 且解析后落在金库的
-skills 目录内。因此不需要 lock 文件就能检测漂移和孤儿链接。
+刻意设计为无状态，不需要 lock 文件就能检测漂移和孤儿：
+
+- 技能：一个链接“被 graft 管理”当且仅当它是 symlink 且解析后落在金库的 `skills/` 内。
+- 插件：Cursor 的本地插件目录拒绝指向目录外的 symlink，所以走**拷贝同步**。
+  “被管理”的判定退化为：目标是真实目录，且目录名对应金库 `plugins/` 里的一个插件；
+  内容与金库逐文件比较决定 ok / sync。
 """
 
 from __future__ import annotations
@@ -12,31 +16,41 @@ from enum import Enum
 from pathlib import Path
 
 from . import external, fsutil, platforms
-from .profile import Profile, SkillSpec
+from .profile import PluginSpec, Profile, SkillSpec
 from .vault import Vault
+
+KIND_SKILL = "skill"
+KIND_PLUGIN = "plugin"
 
 
 class State(str, Enum):
-    OK = "ok"  # already linked to the vault / external already present
+    OK = "ok"  # already linked / copy up to date / external already present
     LINK = "link"  # nothing there yet -> create symlink
     RELINK = "relink"  # symlink exists but points elsewhere / is broken
     ADOPT = "adopt"  # real copy identical to vault -> swap for symlink (safe)
+    COPY = "copy"  # (plugin) nothing usable there yet -> copy from vault
+    SYNC = "sync"  # (plugin) copy exists but differs from vault -> backup, re-copy
     CONFLICT = "conflict"  # real copy differs from vault -> needs --force
     EXTERNAL_MISSING = "external-missing"  # delegate to `npx skills add`
-    ORPHAN = "orphan"  # vault symlink no longer declared in profile
-    NOT_IN_VAULT = "not-in-vault"  # profile names a vault skill that does not exist
+    ORPHAN = "orphan"  # managed by graft but no longer declared in profile
+    NOT_IN_VAULT = "not-in-vault"  # profile names a vault skill/plugin that does not exist
     ERROR = "error"  # filesystem operation failed (permissions, ...)
 
 
 @dataclass
 class Action:
     state: State
-    skill: str
+    skill: str  # asset name (skill or plugin)
     platform: str
-    link: Path
+    link: Path  # where the asset lives on the platform (symlink or real copy)
     target: Path | None = None
     source: str | None = None
     note: str = ""
+    kind: str = KIND_SKILL
+
+    @property
+    def is_plugin(self) -> bool:
+        return self.kind == KIND_PLUGIN
 
 
 @dataclass
@@ -83,7 +97,102 @@ def plan(vault: Vault, profile: Profile) -> Report:
             report.actions.append(
                 Action(State.ORPHAN, entry.name, platform_id, entry, note="清单中未声明")
             )
+
+    _plan_plugins(vault, profile, report)
     return report
+
+
+def _plan_plugins(vault: Vault, profile: Profile, report: Report) -> None:
+    vault_plugins = vault.plugins()
+    declared: dict[str, set[str]] = defaultdict(set)
+
+    for spec in profile.plugins.values():
+        for platform_id in spec.to:
+            declared[platform_id].add(spec.name)
+            dest = platforms.get(platform_id).plugins_dir() / spec.name
+            report.actions.append(_plan_plugin(spec, platform_id, dest, vault, vault_plugins))
+
+    for platform_id in profile.targets:
+        platform = platforms.get(platform_id)
+        if not platform.supports_plugins:
+            continue
+        base = platform.plugins_dir()
+        if not base.is_dir():
+            continue
+        for entry in sorted(base.iterdir()):
+            if entry.name.startswith(".") or entry.name in declared[platform_id]:
+                continue
+            if entry.is_symlink():
+                if not vault.contains_plugin(entry):
+                    continue
+                note = "清单中未声明（指向金库的 symlink）"
+            elif entry.is_dir() and entry.name in vault_plugins:
+                note = "清单中未声明（与金库插件同名的拷贝，--prune 时备份）"
+            else:
+                continue
+            report.actions.append(
+                Action(State.ORPHAN, entry.name, platform_id, entry, note=note, kind=KIND_PLUGIN)
+            )
+
+
+def _plan_plugin(
+    spec: PluginSpec, platform_id: str, dest: Path, vault: Vault, vault_plugins
+) -> Action:
+    plugin = vault_plugins.get(spec.name)
+    if plugin is None:
+        return Action(
+            State.NOT_IN_VAULT,
+            spec.name,
+            platform_id,
+            dest,
+            note="金库 plugins/ 中不存在",
+            kind=KIND_PLUGIN,
+        )
+    target = plugin.path
+    if dest.is_symlink():
+        # Cursor 会拒绝任何指向 plugins/local 之外的 symlink，所以链接一律要换成拷贝。
+        if vault.contains_plugin(dest) or not dest.exists():
+            return Action(
+                State.COPY,
+                spec.name,
+                platform_id,
+                dest,
+                target,
+                note=f"替换无效的 symlink（{_describe(dest)}）",
+                kind=KIND_PLUGIN,
+            )
+        return Action(
+            State.CONFLICT,
+            spec.name,
+            platform_id,
+            dest,
+            target,
+            note=f"symlink 指向金库之外：{_describe(dest)}",
+            kind=KIND_PLUGIN,
+        )
+    if dest.exists():
+        if dest.is_dir() and fsutil.dirs_equal(dest, target):
+            return Action(State.OK, spec.name, platform_id, dest, target, kind=KIND_PLUGIN)
+        if dest.is_dir():
+            return Action(
+                State.SYNC,
+                spec.name,
+                platform_id,
+                dest,
+                target,
+                note="拷贝与金库内容不同，将备份后重新拷贝",
+                kind=KIND_PLUGIN,
+            )
+        return Action(
+            State.CONFLICT,
+            spec.name,
+            platform_id,
+            dest,
+            target,
+            note="目标是普通文件",
+            kind=KIND_PLUGIN,
+        )
+    return Action(State.COPY, spec.name, platform_id, dest, target, kind=KIND_PLUGIN)
 
 
 def _plan_vault(spec: SkillSpec, platform_id: str, link: Path, vault_skills) -> Action:
@@ -122,6 +231,9 @@ def _describe(link: Path) -> str:
 
 
 def _execute(action: Action, *, dry_run: bool, force: bool, prune: bool) -> None:
+    if action.is_plugin:
+        _execute_plugin(action, dry_run=dry_run, force=force, prune=prune)
+        return
     if action.state in (State.LINK, State.RELINK, State.ADOPT):
         if dry_run:
             return
@@ -139,6 +251,36 @@ def _execute(action: Action, *, dry_run: bool, force: bool, prune: bool) -> None
         if not dry_run:
             action.link.unlink()
         action.note = "已删除"
+
+
+def _execute_plugin(action: Action, *, dry_run: bool, force: bool, prune: bool) -> None:
+    """插件只做拷贝：symlink 直接 unlink，真实目录一律先备份。"""
+    label = f"{action.platform}-plugins"
+    if action.state is State.COPY:
+        if dry_run:
+            return
+        if action.link.is_symlink():
+            action.link.unlink()
+        fsutil.copy_tree(action.target, action.link)  # type: ignore[arg-type]
+    elif action.state is State.SYNC:
+        if dry_run:
+            return
+        moved = fsutil.backup(action.link, label)
+        fsutil.copy_tree(action.target, action.link)  # type: ignore[arg-type]
+        action.note = f"已重新拷贝；旧副本备份到 {moved}"
+    elif action.state is State.CONFLICT and force:
+        if dry_run:
+            action.note = "将备份后重新拷贝（--force）"
+            return
+        moved = fsutil.remove_link_or_backup(action.link, label)
+        fsutil.copy_tree(action.target, action.link)  # type: ignore[arg-type]
+        action.note = f"已备份到 {moved}" if moved else "已移除 symlink 并拷贝"
+    elif action.state is State.ORPHAN and prune:
+        if dry_run:
+            action.note = "将删除 symlink / 备份真实目录（--prune）"
+            return
+        moved = fsutil.remove_link_or_backup(action.link, label)
+        action.note = f"已备份到 {moved}" if moved else "已删除"
 
 
 def apply(
