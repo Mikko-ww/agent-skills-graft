@@ -4,22 +4,25 @@
 
 主链路：`matt-grill-with-docs` → `matt-to-spec` → `matt-to-tickets` → `matt-implement`（实现时驱动 `matt-tdd`，收尾 `matt-code-review`）。不确定从哪开始时，显式调用 `matt-skill-flows`。
 
-`graft` **尚未管理**本插件。本仓库只存放内容；本机 Cursor 用下面的安全流程接到 `~/.cursor/plugins/local/`。
-
 ## 本机启用（Cursor）
 
-目标：`~/.cursor/plugins/local/matt-agent-skills`  
-源：本目录（仓库内 `plugins/matt-agent-skills`）
+由 `graft` 管理。清单 `profiles/global.yaml` 里已声明：
 
-1. `mkdir -p ~/.cursor/plugins/local`
-2. 按目标类型处理：
-   - 不存在：`ln -s <源> <目标>`（不要 `-f`）
-   - 已是 symlink 且 `realpath` 等于源：不操作
-   - 已是 symlink 但指向别处或断链：`unlink` 后 `ln -s`
-   - 普通文件或真实目录：先 `mkdir -p ~/.local/share/graft/backup/<时间戳>`，再把目标 **mv** 为该目录下的 `matt-agent-skills`（不要先 mkdir 最终目录名，以免嵌套成 `…/matt-agent-skills/matt-agent-skills`），然后 `ln -s`
-3. 确认 `test -L` 为真，且 `realpath` 等于源
+```yaml
+plugins:
+  matt-agent-skills: { to: [cursor] }
+```
 
-不要用裸 `ln -sfn`：`-f` 可能删掉普通文件。
+```bash
+uv run graft status        # 插件行显示 copy / sync / ok
+uv run graft apply         # 拷贝到 ~/.cursor/plugins/local/matt-agent-skills
+```
+
+这是**拷贝**不是 symlink：Cursor 的本地插件加载器对 `~/.cursor/plugins/local/` 下的每个条目做
+`realpath` 校验，指向目录外的软链会被 `rejected: symlink target … is outside` 拒绝（可在
+`Cursor Plugins.log` 里看到）。因此改了本目录任何文件后，需要再跑一次 `graft apply`；`status` 会把过期的
+拷贝标为 `sync`，重新拷贝前旧副本会移到 `~/.local/share/graft/backup/<时间戳>/cursor-plugins/`。
+Cursor 会在几秒内自动重新扫描本地插件目录，不需要重启。
 
 ## 调用
 

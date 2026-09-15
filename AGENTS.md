@@ -8,9 +8,9 @@
 一个"金库 + 清单 + 薄胶水"：
 
 - **金库（vault）** `skills/`：我自己维护的 skill 的唯一事实来源（后续加 agents / commands / rules）。
-- **插件内容** `plugins/`：自有插件目录（目前 `matt-agent-skills`）；**graft 尚未管理**，清单也还没有 `plugins:` 段。
+- **插件** `plugins/`：自有插件目录（目前 `matt-agent-skills`），每个含 `plugin.yaml`；由清单 `plugins:` 段声明，**拷贝同步**到平台本地插件目录（目前只有 Cursor）。
 - **清单（profile）** `profiles/*.yaml`：声明"哪个资产 → 装到哪个平台 → 全局还是某项目"。
-- **胶水** `graft` CLI（Python 3.11 + uv）：读清单、对比磁盘、把差异补齐。金库技能直接 **symlink** 到各平台目录；外部技能委托 `npx skills add`（vercel-labs/skills）。
+- **胶水** `graft` CLI（Python 3.11 + uv）：读清单、对比磁盘、把差异补齐。金库技能直接 **symlink** 到各平台目录；插件 **拷贝**（Cursor 拒绝指向目录外的软链）；外部技能委托 `npx skills add`（vercel-labs/skills）。
 
 它**不是**新的安装器、不是技能市场、不 vendor 第三方技能。
 
@@ -25,8 +25,8 @@ agent-skills-graft/
 │   ├── searching-github-projects/   # 自有，中文
 │   ├── skill-lookup/                # 自有，中文
 │   └── sora/                        # 上游原样收编（Apache-2.0），保持英文
-├── plugins/                  # 自有插件内容（graft 尚未管理）
-│   └── matt-agent-skills/    # 方案 A 收编；本机 Cursor 用 symlink
+├── plugins/                  # 自有插件：<name>/plugin.yaml + skills/ + 三家 plugin.json
+│   └── matt-agent-skills/    # 方案 A 收编；graft 拷贝到 ~/.cursor/plugins/local/
 ├── profiles/
 │   ├── global.yaml           # 机器级清单（当前唯一生效的清单）
 │   └── projects/<name>.yaml  # 项目级清单（Phase 2，目录尚未创建）
@@ -41,8 +41,10 @@ agent-skills-graft/
 |---|---|---|
 | 金库技能 | `skills/<name>/SKILL.md` 存在 | 名字取 frontmatter `name`，回退目录名；目录名应与 `name` 一致 |
 | 外部技能 | 清单里带 `source: owner/repo` | **不入库**，文件由 `npx skills add` 放置；graft 只判断目标路径是否存在 |
-| 被 graft 管理 | 目标路径是 symlink，且 `resolve()` 落在 `<repo>/skills/` 内 | 由此无状态判定 ok / orphan，**没有 lock 文件**，也不要加 |
-| 备份 | 任何被替换的真实目录移到 `~/.local/share/graft/backup/<时间戳>/` | **永不直接删除用户文件**；symlink 可直接 unlink |
+| 金库插件 | `plugins/<name>/plugin.yaml` 存在 | 名字取 `plugin.yaml` 的 `name`，回退目录名；**拷贝**到平台插件目录，不 symlink |
+| 被 graft 管理（技能） | 目标路径是 symlink，且 `resolve()` 落在 `<repo>/skills/` 内 | 由此无状态判定 ok / orphan，**没有 lock 文件**，也不要加 |
+| 被 graft 管理（插件） | 目标是真实目录，且目录名对应金库里的一个插件 | 内容用 `fsutil.dirs_equal()` 逐文件比较决定 ok / sync；同样不加 lock |
+| 备份 | 任何被替换的真实目录移到 `~/.local/share/graft/backup/<时间戳>/` | **永不直接删除用户文件**；symlink 可直接 unlink；插件 `sync` 前旧副本也进备份 |
 | 平台 id | 与 vercel `skills` CLI 的 `--agent` 名一致 | 新增平台必须沿用其命名，路径以其 `src/agents.ts` 为准 |
 
 ### 平台路径（`src/graft/platforms.py`）
@@ -57,32 +59,36 @@ agent-skills-graft/
 | `gemini-cli` / `antigravity` / `github-copilot` | `.agents/skills` | `~/.gemini/skills` / `~/.gemini/antigravity/skills` / `~/.copilot/skills` |
 | `universal` | `.agents/skills` | `~/.agents/skills`（vercel skills 的规范目录） |
 
+本地插件目录（`Platform._global_plugins_dir`，机器级）：只有 `cursor` → `~/.cursor/plugins/local`。Claude Code / Codex 没有"放目录即发现"的机制，要走 marketplace，属后续工作；清单里给它们声明插件会在加载时报错。
+
 ## 4. 代码地图（`src/graft/`）
 
 | 文件 | 职责 | 改动时注意 |
 |---|---|---|
-| `platforms.py` | 平台注册表、路径展开、按路径反推平台 | 路径模板用 `$HOME/$XDG_CONFIG_HOME/$CLAUDE_HOME/$CODEX_HOME` 占位，运行时展开，便于测试时用假 HOME |
-| `vault.py` | 定位仓库根（`$GRAFT_HOME` → 向上找 `profiles/`+`skills/` → 包所在仓库）、枚举技能、解析 frontmatter | `Vault.contains()` 是"被管理"判定的唯一依据 |
-| `profile.py` | 加载/校验/回写清单（ruamel.yaml，保留注释） | `to: "*"` 展开为 `targets`；`to` 里的平台必须在 `targets` 内，否则报错 |
-| `engine.py` | `plan()` 产出 `Action` 列表；`apply()` 执行 | 状态机见下表；新增状态要同步 `cli._STATE_STYLE` |
+| `platforms.py` | 平台注册表、路径展开、按路径反推平台、本地插件目录 | 路径模板用 `$HOME/$XDG_CONFIG_HOME/$CLAUDE_HOME/$CODEX_HOME` 占位，运行时展开，便于测试时用假 HOME；`_global_plugins_dir=None` 表示该平台不支持本地插件 |
+| `vault.py` | 定位仓库根（`$GRAFT_HOME` → 向上找 `profiles/`+`skills/` → 包所在仓库）、枚举技能与插件、解析 frontmatter | `Vault.contains()` / `contains_plugin()` 是"symlink 是否指向金库"的唯一依据 |
+| `profile.py` | 加载/校验/回写清单（ruamel.yaml，保留注释） | `to: "*"` 展开为 `targets`（插件只展开到支持插件的平台）；`to` 里的平台必须在 `targets` 内，否则报错；`plugins:` 不能与 `path:` 同现 |
+| `engine.py` | `plan()` 产出 `Action` 列表；`apply()` 执行 | 状态机见下表；`Action.kind` 区分 skill / plugin，插件动作走 `_execute_plugin`；新增状态要同步 `cli._STATE_STYLE` |
 | `importer.py` | `graft import` 收编逻辑 | 外部来源判定顺序：`--source` → 清单已有 `source` → `~/.agents/.skill-lock.json` |
 | `external.py` | 组装并执行 `npx -y skills@latest add …` | 按 (source, skill) 分组，一次传多个 `--agent` |
-| `fsutil.py` | symlink、备份、递归目录等价比较（忽略 `.DS_Store/.git/__pycache__`） | symlink 用绝对路径 |
-| `cli.py` | typer 命令：`status / apply / import / platforms / skills` | 文案中文；`status` 有差异时退出码 1 |
+| `fsutil.py` | symlink、拷贝、备份、递归目录等价比较（忽略 `.DS_Store/.git/__pycache__`） | symlink 用绝对路径；`copy_tree()` 用 `copy2` 保留 mtime，使 `dirs_equal()` 浅比较刚拷完即相等 |
+| `cli.py` | typer 命令：`status / apply / import / platforms / skills / plugins` | 文案中文；`status` 有差异时退出码 1 |
 
 ### 状态机（`engine.State`）
 
-| state | 含义 | `apply` 动作 |
-|---|---|---|
-| `ok` | 已链接 / 外部技能已存在 | 无 |
-| `link` | 目标不存在 | 建 symlink |
-| `relink` | 是 symlink 但指向别处或断链 | 重建 |
-| `adopt` | 真实目录且内容与金库一致 | 备份 → symlink |
-| `conflict` | 真实目录且内容不同 | 报错退出 1；`--force` 时备份 → symlink |
-| `external-missing` | 外部技能不存在 | 调 `npx skills add`（`--no-external` 跳过） |
-| `orphan` | 指向金库但清单未声明 | 仅 `--prune` 时 unlink |
-| `not-in-vault` | 清单声明了金库里没有的技能 | 报错退出 1 |
-| `error` | 文件系统操作失败 | 记录并继续，最终退出 1 |
+| state | 适用 | 含义 | `apply` 动作 |
+|---|---|---|---|
+| `ok` | 技能 / 插件 | 已链接 / 拷贝一致 / 外部技能已存在 | 无 |
+| `link` | 技能 | 目标不存在 | 建 symlink |
+| `relink` | 技能 | 是 symlink 但指向别处或断链 | 重建 |
+| `adopt` | 技能 | 真实目录且内容与金库一致 | 备份 → symlink |
+| `copy` | 插件 | 目标不存在，或是指向金库 / 断掉的 symlink | unlink → 拷贝 |
+| `sync` | 插件 | 真实目录但内容与金库不同 | 备份 → 重新拷贝（不需要 `--force`） |
+| `conflict` | 技能 / 插件 | 技能：真实目录且内容不同；插件：普通文件或指向金库外的 symlink | 报错退出 1；`--force` 时备份 → symlink / 拷贝 |
+| `external-missing` | 技能 | 外部技能不存在 | 调 `npx skills add`（`--no-external` 跳过） |
+| `orphan` | 技能 / 插件 | 被 graft 管理但清单未声明 | 仅 `--prune` 时：symlink unlink，真实拷贝备份 |
+| `not-in-vault` | 技能 / 插件 | 清单声明了金库里没有的资产 | 报错退出 1 |
+| `error` | 技能 / 插件 | 文件系统操作失败 | 记录并继续，最终退出 1 |
 
 ## 5. 日常工作流
 
@@ -91,7 +97,7 @@ uv sync                          # 首次
 uv run graft status              # 看差异（退出码 1 = 有事要做）
 uv run graft apply -n            # 预演
 uv run graft apply               # 执行
-uv run graft apply --prune       # 顺带清孤儿链接
+uv run graft apply --prune       # 顺带清孤儿链接 / 孤儿插件拷贝
 uv run graft import <path> [-n] [--source owner/repo] [--to a,b] [--rename x]
 ```
 
@@ -101,14 +107,18 @@ uv run graft import <path> [-n] [--source owner/repo] [--to a,b] [--rename x]
 
 **更新外部技能**：`npx skills update`，不归 graft 管。
 
+**新增 / 修改一个插件**：`plugins/<name>/plugin.yaml` + `.cursor-plugin/plugin.json` + `skills/` → 在 `plugins:` 加一行 → `graft apply`。插件是拷贝，**改完任何文件都要再跑 `graft apply`**（`status` 会显示 `sync`）；Cursor 几秒内自动重新扫描 `~/.cursor/plugins/local/`，验证可看 `Cursor Plugins.log` 里的 `loadUserLocalPlugin <name> loaded`。
+
 ## 6. 验证要求
 
 - 改 `src/graft/` 后必须通过：`uvx ruff format src/ && uvx ruff check src/`。
 - 手工验证用**隔离环境**，不要直接对真实 HOME 试错：
   ```bash
-  export HOME=/tmp/x/home GRAFT_HOME=/tmp/x/vault XDG_CONFIG_HOME=$HOME/.config XDG_DATA_HOME=$HOME/.local/share
+  export HOME=/tmp/x/home GRAFT_HOME=/tmp/x/vault
+  export XDG_CONFIG_HOME=$HOME/.config XDG_DATA_HOME=$HOME/.local/share   # 必须另起一行，否则 $HOME 还是旧值，备份会落进真实目录
   ```
   流程覆盖：import（moved / linked / external / conflict）→ apply（link / adopt / conflict → `--force`）→ 删清单条目 → orphan → `--prune` → 再跑 `status` 应为全 ok。
+  插件另覆盖：起点放一条指向假金库的 symlink → apply 应为 `copy` 并换成真目录（不带 `.DS_Store`）→ 改金库 → `sync` → 目标换成普通文件 → `conflict` / `--force` → 删清单条目 → `orphan` → `--prune` 走备份。
 - 对真实机器执行前先 `-n` 预演；完成后 `graft status` 退出码必须为 0。
 - 验证脚本放在仓库外（`/tmp`），不要提交。仓库目前**没有** `tests/`，若要加请用 pytest + `tmp_path`，并复用上面的隔离环境思路。
 
@@ -127,7 +137,7 @@ uv run graft import <path> [-n] [--source owner/repo] [--to a,b] [--rename x]
 
 详细见 `docs/DESIGN.md` §5。摘要：
 
-- **Phase 1 · plugins**：`matt-agent-skills` 内容已按方案 A 落到 `plugins/matt-agent-skills/`（手写 `plugin.yaml` 与三家 manifest；本机 Cursor 已可 symlink）。CLI 仍待做：由 `plugin.yaml` 生成/校验三家 manifest；本仓库注册为三家 marketplace（Claude `claude plugin marketplace add <path>`；Codex `~/.agents/plugins/marketplace.json`；Cursor symlink 到 `~/.cursor/plugins/local/<name>`）；清单加 `plugins:` 段。
+- **Phase 1 · plugins**：已完成清单 `plugins:` 段、金库插件枚举、Cursor 拷贝同步（`copy / sync / orphan`），`matt-agent-skills` 由 graft 管理。仍待做：由 `plugin.yaml` 生成/校验三家 manifest（`graft plugin build --check`）；Claude Code / Codex 走 marketplace 通道（Claude `claude plugin marketplace add <path>`；Codex `~/.agents/plugins/marketplace.json`），设计为 `PluginSpec` 按平台加 `strategy: copy | marketplace`，`marketplace` 只委托原生命令；外部插件记来源。
 - **Phase 2 · 项目级**：`profiles/projects/<name>.yaml`（含 `path:`），`graft apply <name>`；`graft link` 在项目目录内生成清单；`graft doctor`。引擎已按 `profile.project` 抽象，主要是 CLI 与清单发现的工作。
 - **Phase 3 · rules / MCP / hooks / pi**：接 rulesync 生成 AGENTS.md / CLAUDE.md / `.cursor/rules` / MCP；根 `package.json` 加 `pi` 字段；CI 跑 `graft plugin build --check`。
 
@@ -139,5 +149,7 @@ uv run graft import <path> [-n] [--source owner/repo] [--to a,b] [--rename x]
 - 技能目录名与 frontmatter `name` 不一致时，`import` 以 `name` 为准，并在原目录**规范名**位置留 symlink（历史上 `skills-lookup/` → `skill-lookup`）。
 - `universal` 平台对应 `~/.agents/skills`；vercel 新版把 universal agent 的全局目录改成 `~/.config/agents/skills`，但规范拷贝仍在 `~/.agents/skills`，存在性判断不受影响。
 - 沙箱环境可能禁止写 `~/.cursor`，本地验证时若报 `Operation not permitted`，是沙箱而非代码问题。
+- **Cursor 本地插件不能 symlink**：`~/.cursor/plugins/local/<name>` 若是指向目录外的软链，加载器 `realpath` 校验后直接 `rejected`，日志在 `~/Library/Application Support/Cursor/logs/*/exthost/anysphere.cursor-agent-exec/Cursor Plugins.log`。这就是插件走拷贝的原因；不要再尝试建链。
+- `agent --plugin-dir <path>` 只对 Cursor CLI 生效，IDE 不认；`agent plugin marketplace add` 只接 git URL 且按 commit 缓存快照。
 - 清单被 `import` 改写的条目会丢失该条目自身的行内注释（ruamel 局限）。
 - Windows 未考虑（symlink 权限）。
